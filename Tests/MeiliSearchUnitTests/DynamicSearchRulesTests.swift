@@ -356,7 +356,7 @@ class DynamicSearchRulesTests: XCTestCase {
       }
       """, code: 202)
     let expectation = XCTestExpectation(description: "Update a dynamic search rule")
-    let filter = DynamicSearchRuleFilter.groups([["genre = horror", "genre = comedy"], ["year > 2000"]])
+    let filter = DynamicSearchRuleScaleFilter.groups([["genre = horror", "genre = comedy"], ["year > 2000"]])
 
     client.updateOrCreateDynamicSearchRule(
       uid: "boost-horror",
@@ -469,18 +469,18 @@ class DynamicSearchRulesTests: XCTestCase {
     XCTAssertThrowsError(try decodeJSON(from: #"{"pin":[{"id":"9"}]}"#) as DynamicSearchRuleActions)
   }
 
-  func testDynamicSearchRuleFilterDecodesBothServerForms() throws {
-    let expression: DynamicSearchRuleFilter = try decodeJSON(from: #""genre = horror""#)
+  func testDynamicSearchRuleScaleFilterDecodesBothServerForms() throws {
+    let expression: DynamicSearchRuleScaleFilter = try decodeJSON(from: #""genre = horror""#)
     XCTAssertEqual(expression, .expression("genre = horror"))
 
     // Meilisearch returns the filter as it was sent, where a group may be a bare expression.
-    let mixed: DynamicSearchRuleFilter = try decodeJSON(
+    let mixed: DynamicSearchRuleScaleFilter = try decodeJSON(
       from: #"[["genre = horror","genre = comedy"],"year > 2000"]"#
     )
     XCTAssertEqual(mixed, .groups([["genre = horror", "genre = comedy"], ["year > 2000"]]))
 
-    XCTAssertThrowsError(try decodeJSON(from: "42") as DynamicSearchRuleFilter)
-    XCTAssertThrowsError(try decodeJSON(from: #"[[["genre = horror"]]]"#) as DynamicSearchRuleFilter)
+    XCTAssertThrowsError(try decodeJSON(from: "42") as DynamicSearchRuleScaleFilter)
+    XCTAssertThrowsError(try decodeJSON(from: #"[[["genre = horror"]]]"#) as DynamicSearchRuleScaleFilter)
   }
 
   private func assertJSON(

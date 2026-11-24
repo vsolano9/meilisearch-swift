@@ -131,14 +131,14 @@ public struct DynamicSearchRuleScaleAction: Codable, Equatable {
   /// Primary key values of the documents to select.
   public let ids: [String]?
   /// Filter selecting the documents.
-  public let filter: DynamicSearchRuleFilter?
+  public let filter: DynamicSearchRuleScaleFilter?
   /// Above 1 boosts the selected documents, below 1 demotes them and 0 hides them.
   public let weight: Double
 
   public init(
     indexUid: String? = nil,
     ids: [String]? = nil,
-    filter: DynamicSearchRuleFilter? = nil,
+    filter: DynamicSearchRuleScaleFilter? = nil,
     weight: Double
   ) {
     self.indexUid = indexUid
@@ -151,7 +151,7 @@ public struct DynamicSearchRuleScaleAction: Codable, Equatable {
 /**
  The filter of a scale action, in either form Meilisearch accepts.
  */
-public enum DynamicSearchRuleFilter: Codable, Equatable {
+public enum DynamicSearchRuleScaleFilter: Codable, Equatable {
   /// A single filter expression, such as `genres = horror AND year > 2000`.
   case expression(String)
   /// Groups of filter expressions: a document must match at least one expression of every group.
