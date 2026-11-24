@@ -31,14 +31,15 @@ public struct DynamicSearchRuleParams: Codable, Equatable {
   public let precedence: Int?
   public let active: Bool?
   public let conditions: DynamicSearchRuleConditions?
-  public let actions: [DynamicSearchRuleAction]?
+  /// Replaces every action of the rule: an empty value removes them all, `nil` leaves them unchanged.
+  public let actions: DynamicSearchRuleActions?
 
   public init(
     description: String? = nil,
     precedence: Int? = nil,
     active: Bool? = nil,
     conditions: DynamicSearchRuleConditions? = nil,
-    actions: [DynamicSearchRuleAction]? = nil
+    actions: DynamicSearchRuleActions? = nil
   ) {
     self.description = description
     self.precedence = precedence

@@ -2,6 +2,9 @@ import Foundation
 
 /**
  A dynamic search rule configured on a Meilisearch instance.
+
+ Dynamic search rules are experimental: the `dynamicSearchRules` experimental feature must be enabled
+ on the instance. The format of `actions` requires Meilisearch v1.54.0 or later.
  */
 public struct DynamicSearchRule: Codable, Equatable {
   public let uid: String
@@ -9,7 +12,7 @@ public struct DynamicSearchRule: Codable, Equatable {
   public let precedence: Int?
   public let active: Bool
   public let conditions: DynamicSearchRuleConditions
-  public let actions: [DynamicSearchRuleAction]
+  public let actions: DynamicSearchRuleActions
 
   public init(
     uid: String,
@@ -17,7 +20,7 @@ public struct DynamicSearchRule: Codable, Equatable {
     precedence: Int? = nil,
     active: Bool,
     conditions: DynamicSearchRuleConditions = DynamicSearchRuleConditions(),
-    actions: [DynamicSearchRuleAction]
+    actions: DynamicSearchRuleActions = DynamicSearchRuleActions()
   ) {
     self.uid = uid
     self.description = description
@@ -61,72 +64,129 @@ public struct DynamicSearchRuleQueryCondition: Codable, Equatable {
   }
 }
 
-public struct DynamicSearchRuleAction: Codable, Equatable {
-  public let selector: DynamicSearchRuleSelector
-  public let action: DynamicSearchRuleActionPayload
+/**
+ The actions of a dynamic search rule, grouped by kind.
+
+ A kind without actions is left out of the JSON, as Meilisearch does: a rule without actions has `{}`.
+ */
+public struct DynamicSearchRuleActions: Codable, Equatable {
+  /// Documents pinned at a fixed position in the search results.
+  public let pin: [DynamicSearchRulePinAction]
+  /// Documents whose relevancy score is multiplied by a weight.
+  public let scale: [DynamicSearchRuleScaleAction]
 
   public init(
-    selector: DynamicSearchRuleSelector,
-    action: DynamicSearchRuleActionPayload
+    pin: [DynamicSearchRulePinAction] = [],
+    scale: [DynamicSearchRuleScaleAction] = []
   ) {
-    self.selector = selector
-    self.action = action
+    self.pin = pin
+    self.scale = scale
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    pin = try container.decodeIfPresent([DynamicSearchRulePinAction].self, forKey: .pin) ?? []
+    scale = try container.decodeIfPresent([DynamicSearchRuleScaleAction].self, forKey: .scale) ?? []
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    if !pin.isEmpty {
+      try container.encode(pin, forKey: .pin)
+    }
+    if !scale.isEmpty {
+      try container.encode(scale, forKey: .scale)
+    }
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case pin
+    case scale
   }
 }
 
-public struct DynamicSearchRuleSelector: Codable, Equatable {
+public struct DynamicSearchRulePinAction: Codable, Equatable {
+  /// Index the action is limited to. When `nil`, the action applies to searches on any index.
   public let indexUid: String?
+  /// Primary key value of the document to pin.
   public let id: String
-
-  public init(indexUid: String? = nil, id: String) {
-    self.indexUid = indexUid
-    self.id = id
-  }
-}
-
-public struct DynamicSearchRuleActionPayload: Codable, Equatable {
-  public let type: DynamicSearchRuleActionType
+  /// Position at which the document is pinned.
   public let position: Int
 
-  public init(type: DynamicSearchRuleActionType = .pin, position: Int) {
-    self.type = type
+  public init(indexUid: String? = nil, id: String, position: Int) {
+    self.indexUid = indexUid
+    self.id = id
     self.position = position
   }
 }
 
-public enum DynamicSearchRuleActionType: Codable, Equatable, LosslessStringConvertible {
-  case pin
-  case unknown(String)
+/**
+ Multiplies the relevancy score of the selected documents by `weight`.
+
+ Meilisearch requires a non-empty `ids` or `filter`. When both are set, a document must match both.
+ */
+public struct DynamicSearchRuleScaleAction: Codable, Equatable {
+  /// Index the action is limited to. When `nil`, the action applies to searches on any index.
+  public let indexUid: String?
+  /// Primary key values of the documents to select.
+  public let ids: [String]?
+  /// Filter selecting the documents.
+  public let filter: DynamicSearchRuleFilter?
+  /// Above 1 boosts the selected documents, below 1 demotes them and 0 hides them.
+  public let weight: Double
+
+  public init(
+    indexUid: String? = nil,
+    ids: [String]? = nil,
+    filter: DynamicSearchRuleFilter? = nil,
+    weight: Double
+  ) {
+    self.indexUid = indexUid
+    self.ids = ids
+    self.filter = filter
+    self.weight = weight
+  }
+}
+
+/**
+ The filter of a scale action, in either form Meilisearch accepts.
+ */
+public enum DynamicSearchRuleFilter: Codable, Equatable {
+  /// A single filter expression, such as `genres = horror AND year > 2000`.
+  case expression(String)
+  /// Groups of filter expressions: a document must match at least one expression of every group.
+  case groups([[String]])
 
   public init(from decoder: Decoder) throws {
-    let value = try decoder.singleValueContainer().decode(String.self)
-    self.init(rawValue: value)
-  }
-
-  internal init(rawValue: String) {
-    switch rawValue {
-    case "pin":
-      self = .pin
-    default:
-      self = .unknown(rawValue)
+    let container = try decoder.singleValueContainer()
+    if let expression = try? container.decode(String.self) {
+      self = .expression(expression)
+    } else {
+      self = .groups(try container.decode([Group].self).map { $0.expressions })
     }
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.singleValueContainer()
-    try container.encode(description)
-  }
-
-  public init?(_ description: String) {
-    self.init(rawValue: description)
-  }
-
-  public var description: String {
     switch self {
-    case .pin:
-      return "pin"
-    case .unknown(let value):
-      return value
+    case .expression(let expression):
+      try container.encode(expression)
+    case .groups(let groups):
+      try container.encode(groups)
+    }
+  }
+
+  /// Meilisearch also accepts a bare expression in place of a group holding that one expression.
+  private struct Group: Decodable {
+    let expressions: [String]
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.singleValueContainer()
+      if let expression = try? container.decode(String.self) {
+        expressions = [expression]
+      } else {
+        expressions = try container.decode([String].self)
+      }
     }
   }
 }

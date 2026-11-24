@@ -368,12 +368,11 @@ patch_dynamic_search_rule_1: |-
       ),
       query: DynamicSearchRuleQueryCondition(isEmpty: true)
     ),
-    actions: [
-      DynamicSearchRuleAction(
-        selector: DynamicSearchRuleSelector(indexUid: "products", id: "123"),
-        action: DynamicSearchRuleActionPayload(position: 1)
-      )
-    ]
+    actions: DynamicSearchRuleActions(
+      pin: [
+        DynamicSearchRulePinAction(indexUid: "products", id: "123", position: 1)
+      ]
+    )
   )
 
   let task = try await self.client.updateOrCreateDynamicSearchRule(
